@@ -1,13 +1,25 @@
 
 import { z } from "zod";
 
-export const idSchema = z
-  .string()
-  .regex(/^[1-9]\d*$/, "ID must be a positive integer")
-  .refine(
-    (id) => BigInt(id) <= 9223372036854775807n,
-    "ID exceeds PostgreSQL BIGINT range"
-  );
+// Safe PostgreSQL BIGINT ID validation
+export const idSchema = z.string().refine(
+  (id) => {
+    // Reject letters, zero, negative numbers and decimals
+    if (!/^[1-9]\d*$/.test(id)) {
+      return false;
+    }
+
+    // Convert only after validating the input
+    try {
+      return BigInt(id) <= 9223372036854775807n;
+    } catch {
+      return false;
+    }
+  },
+  {
+    message: "ID must be a valid positive PostgreSQL BIGINT",
+  }
+);
 
 export const createWorkspaceSchema = z.strictObject({
   name: z.string().trim().min(2).max(120),
