@@ -6,8 +6,23 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Projects & Tasks | WorkFlow Pro",
   description:
-    "Manage projects, tasks and team progress in WorkFlow Pro.",
+    "Manage projects, tasks, team progress and workflows.",
 };
+
+const navigation = [
+  {
+    href: "/projects",
+    label: "Projects & Tasks",
+  },
+  {
+    href: "/projects/insights",
+    label: "Task Insights",
+  },
+  {
+    href: "/projects/board",
+    label: "Task Board",
+  },
+];
 
 export default function ProjectsLayout({
   children,
@@ -22,49 +37,41 @@ export default function ProjectsLayout({
         aria-label="Project management navigation"
         style={{
           position: "fixed",
-          right: "18px",
-          bottom: "18px",
+          right: "16px",
+          bottom: "16px",
           zIndex: 30,
           display: "flex",
-          gap: "8px",
           flexWrap: "wrap",
           justifyContent: "flex-end",
+          gap: "8px",
+          maxWidth: "calc(100% - 32px)",
         }}
       >
-        <Link
-          href="/projects"
-          style={{
-            padding: "12px 16px",
-            borderRadius: "12px",
-            border: "1px solid #485777",
-            background: "#17233d",
-            color: "#ffffff",
-            fontSize: "13px",
-            fontWeight: 700,
-            textDecoration: "none",
-            boxShadow: "0 10px 28px #0007",
-          }}
-        >
-          Projects & Tasks
-        </Link>
-
-        <Link
-          href="/projects/insights"
-          style={{
-            padding: "12px 16px",
-            borderRadius: "12px",
-            border: "1px solid #948bff",
-            background:
-              "linear-gradient(120deg, #6366f1, #7546db)",
-            color: "#ffffff",
-            fontSize: "13px",
-            fontWeight: 700,
-            textDecoration: "none",
-            boxShadow: "0 10px 28px #0007",
-          }}
-        >
-          Task Insights
-        </Link>
+        {navigation.map((item, index) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "11px 14px",
+              borderRadius: "11px",
+              border: "1px solid #6673a3",
+              background:
+                index === 2
+                  ? "linear-gradient(120deg, #6366f1, #7b46d9)"
+                  : "#17233d",
+              color: "#ffffff",
+              fontSize: "12px",
+              fontWeight: 750,
+              textDecoration: "none",
+              boxShadow: "0 10px 28px #0007",
+            }}
+          >
+            {item.label}
+          </Link>
+        ))}
       </nav>
     </>
   );
