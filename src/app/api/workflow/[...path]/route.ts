@@ -1,7 +1,4 @@
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
 type Context = {
   params: Promise<{ path: string[] }>;
 };
@@ -52,10 +49,11 @@ async function forward(
     return jsonError(404, "Route not found");
   }
 
-  // Verify where browser write requests originate.
+  // Verify browser origins on state-changing requests.
   if (request.method !== "GET") {
     const currentOrigin = new URL(request.url).origin;
     const suppliedOrigin = request.headers.get("origin");
+
     const fetchSite =
       request.headers.get("sec-fetch-site");
 
@@ -69,6 +67,7 @@ async function forward(
     }
   }
 
+  // Server-side backend address.
   let backend: URL;
 
   try {
@@ -77,11 +76,20 @@ async function forward(
         "http://127.0.0.1:4000"
     );
 
-    if (!["http:", "https:"].includes(backend.protocol)) {
-      return jsonError(503, "Invalid backend configuration");
+    if (
+      backend.protocol !== "http:" &&
+      backend.protocol !== "https:"
+    ) {
+      return jsonError(
+        503,
+        "Invalid backend configuration"
+      );
     }
   } catch {
-    return jsonError(503, "Invalid backend configuration");
+    return jsonError(
+      503,
+      "Invalid backend configuration"
+    );
   }
 
   const endpoint = new URL(
@@ -89,14 +97,13 @@ async function forward(
     backend.origin
   );
 
-  // Never send arbitrary browser headers upstream.
-  // Forward only the headers needed by our API.
+  // Whitelist only necessary upstream headers.
   const headers = new Headers();
 
   headers.set("Accept", "application/json");
 
-  // The Express Origin check expects its own configured
-  // backend origin. The browser origin was checked above.
+  // Browser origin was checked above.
+  // Express checks the origin of the server-side request.
   headers.set("Origin", backend.origin);
 
   const sessionCookie = request.headers.get("cookie");
@@ -134,7 +141,6 @@ async function forward(
       signal: AbortSignal.timeout(10_000),
     });
 
-    // Auth responses must never be cached.
     const responseHeaders = new Headers({
       "Cache-Control": "no-store",
       "Content-Type":
@@ -142,8 +148,9 @@ async function forward(
         "application/json",
     });
 
-    // Preserve the backend's HttpOnly session cookie.
-    const setCookie = upstream.headers.get("set-cookie");
+    // Preserve the existing HttpOnly login cookie.
+    const setCookie =
+      upstream.headers.get("set-cookie");
 
     if (setCookie) {
       responseHeaders.set("Set-Cookie", setCookie);
