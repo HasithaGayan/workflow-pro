@@ -22,7 +22,7 @@ function apiError(
 }
 
 function validId(value: string): boolean {
-  // Positive database IDs only.
+  // Allow positive PostgreSQL bigint IDs only.
   if (!/^[1-9][0-9]*$/.test(value)) {
     return false;
   }
@@ -38,6 +38,43 @@ function routeAllowed(
 ): boolean {
   const route = parts.join("/");
 
+  // ==========================================
+  // DAY 53 — TEAM MEMBERSHIP MANAGEMENT
+  // ==========================================
+
+  if (parts[0] === "team-members") {
+    // GET /team-members/:workspaceId
+    // POST /team-members/:workspaceId
+    if (
+      parts.length === 2 &&
+      validId(parts[1])
+    ) {
+      return (
+        method === "GET" ||
+        method === "POST"
+      );
+    }
+
+    // PATCH /team-members/:workspaceId/:userId
+    // DELETE /team-members/:workspaceId/:userId
+    if (
+      parts.length === 3 &&
+      validId(parts[1]) &&
+      validId(parts[2])
+    ) {
+      return (
+        method === "PATCH" ||
+        method === "DELETE"
+      );
+    }
+
+    return false;
+  }
+
+  // ==========================================
+  // EXISTING GET ENDPOINTS
+  // ==========================================
+
   if (method === "GET") {
     if (
       [
@@ -50,6 +87,7 @@ function routeAllowed(
       return true;
     }
 
+    // List projects belonging to a workspace.
     if (
       parts.length === 3 &&
       parts[0] === "workspaces" &&
@@ -59,6 +97,7 @@ function routeAllowed(
       return true;
     }
 
+    // List tasks belonging to a project.
     if (
       parts.length === 3 &&
       parts[0] === "projects" &&
@@ -68,6 +107,7 @@ function routeAllowed(
       return true;
     }
 
+    // Read a specific task.
     if (
       parts.length === 2 &&
       parts[0] === "tasks" &&
@@ -76,6 +116,10 @@ function routeAllowed(
       return true;
     }
   }
+
+  // ==========================================
+  // EXISTING POST ENDPOINTS
+  // ==========================================
 
   if (method === "POST") {
     return [
@@ -88,6 +132,10 @@ function routeAllowed(
     ].includes(route);
   }
 
+  // ==========================================
+  // EXISTING PATCH ENDPOINTS
+  // ==========================================
+
   if (method === "PATCH") {
     return (
       parts.length === 2 &&
@@ -96,6 +144,7 @@ function routeAllowed(
     );
   }
 
+  // Reject every other route.
   return false;
 }
 
@@ -105,17 +154,22 @@ async function forward(
 ): Promise<Response> {
   const { path } = await context.params;
 
+  // Allow only explicitly approved API routes.
   if (!routeAllowed(request.method, path)) {
     return apiError(404, "Route not found");
   }
 
-  // Reject cross-origin browser writes.
+  // ==========================================
+  // REQUEST ORIGIN SECURITY
+  // ==========================================
+
   if (
     !["GET", "HEAD", "OPTIONS"].includes(
       request.method
     )
   ) {
     const ownOrigin = new URL(request.url).origin;
+
     const receivedOrigin =
       request.headers.get("origin");
 
@@ -124,14 +178,25 @@ async function forward(
 
     if (
       fetchSite === "cross-site" ||
-      (receivedOrigin !== null &&
-        receivedOrigin !== ownOrigin) ||
-      (receivedOrigin === null &&
-        fetchSite === "same-site")
+      (
+        receivedOrigin !== null &&
+        receivedOrigin !== ownOrigin
+      ) ||
+      (
+        receivedOrigin === null &&
+        fetchSite === "same-site"
+      )
     ) {
-      return apiError(403, "Untrusted request origin");
+      return apiError(
+        403,
+        "Untrusted request origin"
+      );
     }
   }
+
+  // ==========================================
+  // BACKEND CONFIGURATION
+  // ==========================================
 
   let backend: URL;
 
@@ -157,20 +222,25 @@ async function forward(
     );
   }
 
+  // Forward to Express API.
   const endpoint = new URL(
     `/api/${path.join("/")}`,
     backend.origin
   );
 
+  // ==========================================
+  // SAFE REQUEST HEADERS
+  // ==========================================
+
   const headers = new Headers();
 
   headers.set("Accept", "application/json");
 
-  // Express expects its own configured origin.
-  // The browser's origin was checked above.
+  // Express checks the backend's trusted origin.
+  // The browser origin was validated above.
   headers.set("Origin", backend.origin);
 
-  // Only forward WorkFlow Pro authentication cookies.
+  // Forward only WorkFlow Pro session cookies.
   const cookieHeader =
     request.headers.get("cookie") ?? "";
 
@@ -180,19 +250,32 @@ async function forward(
     .filter(
       (cookie) =>
         cookie.startsWith("workflow_session=") ||
-        cookie.startsWith("__Host-workflow_session=")
+        cookie.startsWith(
+          "__Host-workflow_session="
+        )
     );
 
   if (allowedCookies.length > 0) {
-    headers.set("Cookie", allowedCookies.join("; "));
+    headers.set(
+      "Cookie",
+      allowedCookies.join("; ")
+    );
   }
 
+  // Preserve session-bound CSRF protection.
   const csrfToken =
     request.headers.get("x-csrf-token");
 
   if (csrfToken) {
-    headers.set("X-CSRF-Token", csrfToken);
+    headers.set(
+      "X-CSRF-Token",
+      csrfToken
+    );
   }
+
+  // ==========================================
+  // REQUEST BODY VALIDATION
+  // ==========================================
 
   let body: string | undefined;
 
@@ -202,12 +285,25 @@ async function forward(
   ) {
     body = await request.text();
 
-    if (Buffer.byteLength(body, "utf8") > 10_240) {
-      return apiError(413, "Request body too large");
+    // Match the Express 10 KB JSON limit.
+    if (
+      Buffer.byteLength(body, "utf8") > 10_240
+    ) {
+      return apiError(
+        413,
+        "Request body too large"
+      );
     }
 
-    headers.set("Content-Type", "application/json");
+    headers.set(
+      "Content-Type",
+      "application/json"
+    );
   }
+
+  // ==========================================
+  // SEND REQUEST TO EXPRESS
+  // ==========================================
 
   try {
     const upstream = await fetch(endpoint, {
@@ -226,11 +322,15 @@ async function forward(
         "application/json",
     });
 
+    // Preserve login/logout session cookies.
     const setCookie =
       upstream.headers.get("set-cookie");
 
     if (setCookie) {
-      responseHeaders.set("Set-Cookie", setCookie);
+      responseHeaders.set(
+        "Set-Cookie",
+        setCookie
+      );
     }
 
     return new Response(upstream.body, {
@@ -244,6 +344,10 @@ async function forward(
     );
   }
 }
+
+// ============================================
+// NEXT.JS API HANDLERS
+// ============================================
 
 export async function GET(
   request: Request,
@@ -260,6 +364,13 @@ export async function POST(
 }
 
 export async function PATCH(
+  request: Request,
+  context: Context
+): Promise<Response> {
+  return forward(request, context);
+}
+
+export async function DELETE(
   request: Request,
   context: Context
 ): Promise<Response> {

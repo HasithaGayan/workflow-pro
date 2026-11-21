@@ -11,6 +11,7 @@ import {
 } from "./routes/teamRoutes";
 
 import { authRoutes } from "./routes/authRoutes";
+import { memberRoutes } from "./routes/memberRoutes";
 
 import {
   requireLogin,
@@ -46,7 +47,7 @@ app.use(
 
 app.use(express.json({ limit: "10kb" }));
 
-// Request logging
+// Request logging.
 app.use((req, res, next) => {
   const requestId = randomUUID();
   const started = Date.now();
@@ -66,10 +67,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Existing origin protection
+// Reject untrusted browser request origins.
 app.use(verifyRequestOrigin);
 
-// Public health endpoint
+// Public health endpoint.
 app.get("/api/health", (_req, res) => {
   res.status(200).json({
     status: "ok",
@@ -77,13 +78,13 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-// Prevent caching sensitive authentication responses.
+// Sensitive authentication responses must not be cached.
 app.use("/api/auth", (_req, res, next) => {
   res.setHeader("Cache-Control", "no-store");
   next();
 });
 
-// Existing registration and login rate limits
+// Registration and login rate limits.
 app.post(
   "/api/auth/register",
   registrationLimiter
@@ -94,28 +95,24 @@ app.post(
   loginLimiter
 );
 
-// Day 48 — Retrieve the session-bound CSRF token.
+// Session-bound CSRF token endpoint.
 app.get(
   "/api/auth/csrf",
   requireLogin,
   issueCsrfToken
 );
 
-// Day 48 — Logout also requires CSRF protection.
+// Logout requires a valid session and CSRF token.
 app.post(
   "/api/auth/logout",
   requireLogin,
   requireCsrf
 );
 
-// Existing authentication routes
+// Existing authentication routes.
 app.use("/api/auth", authRoutes);
 
-// All protected business routes require:
-// 1. A real authenticated session
-// 2. A valid CSRF token for unsafe requests
-// 3. Permission to access the requested resource
-
+// Existing task routes.
 app.use(
   "/api/tasks",
   requireLogin,
@@ -124,6 +121,7 @@ app.use(
   taskRoutes
 );
 
+// Existing workspace routes.
 app.use(
   "/api/workspaces",
   requireLogin,
@@ -132,6 +130,7 @@ app.use(
   workspaceRoutes
 );
 
+// Existing project routes.
 app.use(
   "/api/projects",
   requireLogin,
@@ -140,7 +139,17 @@ app.use(
   projectRoutes
 );
 
-// Unknown routes
+// Day 53: protected team membership management.
+// The memberRoutes handlers additionally check
+// workspace membership and Owner permissions.
+app.use(
+  "/api/team-members",
+  requireLogin,
+  requireCsrf,
+  memberRoutes
+);
+
+// Unknown routes.
 app.use((_req, res) => {
   res.status(404).json({
     success: false,
@@ -148,5 +157,5 @@ app.use((_req, res) => {
   });
 });
 
-// Central error handler
+// Central error handler.
 app.use(errorHandler);
