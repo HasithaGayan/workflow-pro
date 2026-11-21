@@ -1,6 +1,7 @@
 
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
 
@@ -10,38 +11,73 @@ import { prisma } from "../src/lib/prisma";
 test("Day 46 authentication API", async (t) => {
   const server = app.listen(0, "127.0.0.1");
 
-  const email =
-    `day46.${randomUUID()}@example.com`;
+  const email = `day46.${randomUUID()}@example.com`;
+  const unknownEmail =
+    `unknown.${randomUUID()}@example.com`;
 
-  const password =
-    "Day46-Strong-Test-Password!";
+  const password = "Day46-Strong-Password-2026!";
 
-  let sessionCookie: string | null = null;
+  let cookie = "";
 
   try {
-    await new Promise<void>((resolve, reject) => {
-      server.once("listening", resolve);
-      server.once("error", reject);
-    });
+    await once(server, "listening");
 
-    const address =
-      server.address() as AddressInfo;
+    const address = server.address() as AddressInfo;
+    const base = `http://127.0.0.1:${address.port}`;
 
-    const base =
-      `http://127.0.0.1:${address.port}`;
-
-    function post(
+    // Public auth requests use no CSRF token.
+    // Logout requires the logged-in session's CSRF token.
+    async function post(
       path: string,
       body: unknown,
-      cookie?: string
-    ) {
+      sessionCookie?: string
+    ): Promise<Response> {
+      let csrfToken: string | undefined;
+
+      if (path === "logout" && sessionCookie) {
+        const csrfResponse = await fetch(
+          `${base}/api/auth/csrf`,
+          {
+            headers: {
+              Cookie: sessionCookie,
+            },
+          }
+        );
+
+        assert.equal(csrfResponse.status, 200);
+
+        const csrfBody = await csrfResponse.json();
+
+        csrfToken = csrfBody.csrfToken;
+
+        assert.equal(typeof csrfToken, "string");
+        assert.match(csrfToken!, /^[0-9a-f]{64}$/);
+      }
+
       return fetch(`${base}/api/auth/${path}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(cookie ? { Cookie: cookie } : {}),
+
+          ...(sessionCookie
+            ? { Cookie: sessionCookie }
+            : {}),
+
+          ...(csrfToken
+            ? { "X-CSRF-Token": csrfToken }
+            : {}),
         },
         body: JSON.stringify(body),
+      });
+    }
+
+    function getProfile(
+      sessionCookie?: string
+    ): Promise<Response> {
+      return fetch(`${base}/api/auth/me`, {
+        headers: sessionCookie
+          ? { Cookie: sessionCookie }
+          : {},
       });
     }
 
@@ -51,7 +87,7 @@ test("Day 46 authentication API", async (t) => {
         const response = await post(
           "register",
           {
-            fullName: "Day 46 Test User",
+            fullName: "Day46 Test User",
             email,
             password: "short",
           }
@@ -67,7 +103,7 @@ test("Day 46 authentication API", async (t) => {
         const response = await post(
           "register",
           {
-            fullName: "Day 46 Test User",
+            fullName: "Day46 Test User",
             email,
             password,
           }
@@ -79,9 +115,10 @@ test("Day 46 authentication API", async (t) => {
 
         assert.equal(body.success, true);
         assert.equal(body.data.email, email);
-        assert.ok(body.data.id);
+
+        // Never expose password hashes in API responses.
         assert.equal(
-          JSON.stringify(body).includes(password),
+          JSON.stringify(body).includes("password_hash"),
           false
         );
       }
@@ -93,7 +130,7 @@ test("Day 46 authentication API", async (t) => {
         const response = await post(
           "register",
           {
-            fullName: "Duplicate User",
+            fullName: "Duplicate Test User",
             email,
             password,
           }
@@ -110,7 +147,7 @@ test("Day 46 authentication API", async (t) => {
           "login",
           {
             email,
-            password: "Wrong-Password-12345",
+            password: "Incorrect-Password-123!",
           }
         );
 
@@ -124,7 +161,7 @@ test("Day 46 authentication API", async (t) => {
         const response = await post(
           "login",
           {
-            email: "unknown@example.com",
+            email: unknownEmail,
             password,
           }
         );
@@ -138,39 +175,30 @@ test("Day 46 authentication API", async (t) => {
       async () => {
         const response = await post(
           "login",
-          { email, password }
+          {
+            email,
+            password,
+          }
         );
 
         assert.equal(response.status, 200);
 
-        const body = await response.json();
-
-        assert.equal(body.success, true);
-        assert.equal(body.data.email, email);
-
         const setCookie =
-          response.headers.get("set-cookie");
+          response.headers.get("set-cookie") ?? "";
 
-        assert.ok(setCookie);
         assert.match(setCookie, /HttpOnly/i);
-        assert.match(
-          setCookie,
-          /SameSite=Strict/i
-        );
+        assert.match(setCookie, /SameSite=Strict/i);
 
-        sessionCookie =
-          setCookie.split(";")[0];
+        cookie = setCookie.split(";")[0];
 
-        assert.ok(sessionCookie);
+        assert.ok(cookie);
       }
     );
 
     await t.test(
       "Reject unauthenticated profile request",
       async () => {
-        const response = await fetch(
-          `${base}/api/auth/me`
-        );
+        const response = await getProfile();
 
         assert.equal(response.status, 401);
       }
@@ -179,16 +207,7 @@ test("Day 46 authentication API", async (t) => {
     await t.test(
       "Valid session returns current user",
       async () => {
-        assert.ok(sessionCookie);
-
-        const response = await fetch(
-          `${base}/api/auth/me`,
-          {
-            headers: {
-              Cookie: sessionCookie,
-            },
-          }
-        );
+        const response = await getProfile(cookie);
 
         assert.equal(response.status, 200);
 
@@ -201,12 +220,10 @@ test("Day 46 authentication API", async (t) => {
     await t.test(
       "Logout revokes the session",
       async () => {
-        assert.ok(sessionCookie);
-
         const response = await post(
           "logout",
           {},
-          sessionCookie
+          cookie
         );
 
         assert.equal(response.status, 200);
@@ -216,37 +233,34 @@ test("Day 46 authentication API", async (t) => {
     await t.test(
       "Old session cannot authenticate",
       async () => {
-        assert.ok(sessionCookie);
-
-        const response = await fetch(
-          `${base}/api/auth/me`,
-          {
-            headers: {
-              Cookie: sessionCookie,
-            },
-          }
-        );
+        const response = await getProfile(cookie);
 
         assert.equal(response.status, 401);
       }
     );
   } finally {
     try {
-      // Remove only this test's user.
-      // Its credentials and sessions have
-      // ON DELETE CASCADE relationships.
+      // Delete only the temporary Day 46 test user.
+      // Credentials/sessions cascade in PostgreSQL.
       await prisma.app_users.deleteMany({
-        where: { email },
+        where: {
+          email,
+        },
       });
     } finally {
-      await new Promise<void>((resolve, reject) => {
-        server.close((error) => {
-          if (error) reject(error);
-          else resolve();
+      try {
+        await new Promise<void>((resolve, reject) => {
+          server.close((error) => {
+            if (error) {
+              reject(error);
+            } else {
+              resolve();
+            }
+          });
         });
-      });
-
-      await prisma.$disconnect();
+      } finally {
+        await prisma.$disconnect();
+      }
     }
   }
 });

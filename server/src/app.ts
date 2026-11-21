@@ -25,14 +25,17 @@ import {
   verifyRequestOrigin,
 } from "./middleware/securityGuards";
 
+import {
+  issueCsrfToken,
+  requireCsrf,
+} from "./middleware/csrfProtection";
+
 import { errorHandler } from "./middleware/errorHandler";
 
 export const app = express();
 
 app.disable("x-powered-by");
 
-// Day 48 — Security headers.
-// Do not enable HSTS for local HTTP development.
 app.use(
   helmet({
     contentSecurityPolicy: false,
@@ -43,7 +46,7 @@ app.use(
 
 app.use(express.json({ limit: "10kb" }));
 
-// Existing request logging
+// Request logging
 app.use((req, res, next) => {
   const requestId = randomUUID();
   const started = Date.now();
@@ -63,7 +66,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Day 48 — Reject untrusted origins on unsafe requests.
+// Existing origin protection
 app.use(verifyRequestOrigin);
 
 // Public health endpoint
@@ -74,13 +77,13 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-// Authentication responses must not be cached.
+// Prevent caching sensitive authentication responses.
 app.use("/api/auth", (_req, res, next) => {
   res.setHeader("Cache-Control", "no-store");
   next();
 });
 
-// Day 48 — Limits for registration and login.
+// Existing registration and login rate limits
 app.post(
   "/api/auth/register",
   registrationLimiter
@@ -91,13 +94,32 @@ app.post(
   loginLimiter
 );
 
-// Day 46 — Authentication endpoints
+// Day 48 — Retrieve the session-bound CSRF token.
+app.get(
+  "/api/auth/csrf",
+  requireLogin,
+  issueCsrfToken
+);
+
+// Day 48 — Logout also requires CSRF protection.
+app.post(
+  "/api/auth/logout",
+  requireLogin,
+  requireCsrf
+);
+
+// Existing authentication routes
 app.use("/api/auth", authRoutes);
 
-// Day 47 — Authenticated, authorized business routes
+// All protected business routes require:
+// 1. A real authenticated session
+// 2. A valid CSRF token for unsafe requests
+// 3. Permission to access the requested resource
+
 app.use(
   "/api/tasks",
   requireLogin,
+  requireCsrf,
   secureTasks,
   taskRoutes
 );
@@ -105,6 +127,7 @@ app.use(
 app.use(
   "/api/workspaces",
   requireLogin,
+  requireCsrf,
   secureWorkspaces,
   workspaceRoutes
 );
@@ -112,6 +135,7 @@ app.use(
 app.use(
   "/api/projects",
   requireLogin,
+  requireCsrf,
   secureProjects,
   projectRoutes
 );

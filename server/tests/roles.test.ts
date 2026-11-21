@@ -10,8 +10,8 @@ import { prisma } from "../src/lib/prisma";
 
 test("Day 47 workspace role permissions", async (t) => {
   const server = app.listen(0, "127.0.0.1");
-  const unique = randomUUID();
 
+  const unique = randomUUID();
   const password = "RoleTest-Strong-Password-2026!";
 
   const emails = {
@@ -31,22 +31,65 @@ test("Day 47 workspace role permissions", async (t) => {
     const address = server.address() as AddressInfo;
     const base = `http://127.0.0.1:${address.port}`;
 
+    // Automatically request CSRF tokens for
+    // authenticated writes. Public registration
+    // and login do not require session-bound CSRF.
     async function request(
       method: string,
       path: string,
       cookie?: string,
       body?: unknown
     ): Promise<Response> {
+      const isWrite = ![
+        "GET",
+        "HEAD",
+        "OPTIONS",
+      ].includes(method.toUpperCase());
+
+      let csrfToken: string | undefined;
+
+      if (isWrite && cookie) {
+        const csrfResponse = await fetch(
+          `${base}/api/auth/csrf`,
+          {
+            headers: {
+              Cookie: cookie,
+            },
+          }
+        );
+
+        assert.equal(csrfResponse.status, 200);
+
+        const csrfBody = await csrfResponse.json();
+
+        csrfToken = csrfBody.csrfToken;
+
+        assert.equal(typeof csrfToken, "string");
+        assert.match(csrfToken!, /^[0-9a-f]{64}$/);
+      }
+
       return fetch(`${base}${path}`, {
         method,
         headers: {
-          ...(cookie ? { Cookie: cookie } : {}),
+          ...(cookie
+            ? { Cookie: cookie }
+            : {}),
+
+          ...(csrfToken
+            ? { "X-CSRF-Token": csrfToken }
+            : {}),
+
           ...(body !== undefined
-            ? { "Content-Type": "application/json" }
+            ? {
+                "Content-Type": "application/json",
+              }
             : {}),
         },
+
         ...(body !== undefined
-          ? { body: JSON.stringify(body) }
+          ? {
+              body: JSON.stringify(body),
+            }
           : {}),
       });
     }
@@ -54,12 +97,19 @@ test("Day 47 workspace role permissions", async (t) => {
     async function createAccount(
       fullName: string,
       email: string
-    ): Promise<{ id: string; cookie: string }> {
+    ): Promise<{
+      id: string;
+      cookie: string;
+    }> {
       const registration = await request(
         "POST",
         "/api/auth/register",
         undefined,
-        { fullName, email, password }
+        {
+          fullName,
+          email,
+          password,
+        }
       );
 
       assert.equal(registration.status, 201);
@@ -71,7 +121,10 @@ test("Day 47 workspace role permissions", async (t) => {
         "POST",
         "/api/auth/login",
         undefined,
-        { email, password }
+        {
+          email,
+          password,
+        }
       );
 
       assert.equal(login.status, 200);
@@ -82,10 +135,13 @@ test("Day 47 workspace role permissions", async (t) => {
 
       assert.ok(cookie, "Session cookie not found");
 
-      return { id, cookie };
+      return {
+        id,
+        cookie,
+      };
     }
 
-    // Four unique users for this test only.
+    // Four distinct temporary users.
     const owner = await createAccount(
       "Role Test Owner",
       emails.owner
@@ -106,23 +162,27 @@ test("Day 47 workspace role permissions", async (t) => {
       emails.outsider
     );
 
-    // Owner creates a real development workspace.
+    // Owner creates a workspace.
     const workspaceResponse = await request(
       "POST",
       "/api/workspaces",
       owner.cookie,
-      { name: `Role Test Workspace ${unique}` }
+      {
+        name: `Role Test Workspace ${unique}`,
+      }
     );
 
     assert.equal(workspaceResponse.status, 201);
 
-    const workspaceBody = await workspaceResponse.json();
+    const workspaceBody =
+      await workspaceResponse.json();
+
     workspaceId = workspaceBody.data.id;
 
     assert.ok(workspaceId);
 
-    // There is no public invitation/role-management API yet.
-    // Set up admin/member fixture records directly in Prisma.
+    // Prepare role fixtures directly in PostgreSQL.
+    // We haven't built an invitation API yet.
     await prisma.workspace_memberships.createMany({
       data: [
         {
@@ -171,6 +231,7 @@ test("Day 47 workspace role permissions", async (t) => {
         assert.equal(response.status, 201);
 
         const body = await response.json();
+
         projectId = body.data.id;
 
         assert.ok(projectId);
@@ -282,6 +343,7 @@ test("Day 47 workspace role permissions", async (t) => {
         const body = await response.json();
 
         taskId = body.data.id;
+
         assert.ok(taskId);
       }
     );
@@ -293,7 +355,9 @@ test("Day 47 workspace role permissions", async (t) => {
           "PATCH",
           `/api/tasks/${taskId}`,
           admin.cookie,
-          { status: "in_progress" }
+          {
+            status: "in_progress",
+          }
         );
 
         assert.equal(response.status, 200);
@@ -322,13 +386,19 @@ test("Day 47 workspace role permissions", async (t) => {
           "PATCH",
           `/api/tasks/${taskId}`,
           member.cookie,
-          { status: "done" }
+          {
+            status: "done",
+          }
         );
 
         assert.equal(update.status, 200);
 
         const body = await update.json();
-        assert.equal(body.data.status, "done");
+
+        assert.equal(
+          body.data.status,
+          "done"
+        );
       }
     );
 
@@ -347,7 +417,9 @@ test("Day 47 workspace role permissions", async (t) => {
           "PATCH",
           `/api/tasks/${taskId}`,
           outsider.cookie,
-          { status: "todo" }
+          {
+            status: "todo",
+          }
         );
 
         assert.equal(update.status, 404);
@@ -375,14 +447,17 @@ test("Day 47 workspace role permissions", async (t) => {
     );
   } finally {
     try {
-      // Delete ONLY records belonging to the
-      // uniquely created test workspace.
+      // Remove only this unique test workspace.
       if (workspaceId !== null) {
         const id = BigInt(workspaceId);
 
         const projects = await prisma.projects.findMany({
-          where: { workspace_id: id },
-          select: { project_id: true },
+          where: {
+            workspace_id: id,
+          },
+          select: {
+            project_id: true,
+          },
         });
 
         const projectIds = projects.map(
@@ -391,7 +466,9 @@ test("Day 47 workspace role permissions", async (t) => {
 
         await prisma.tasks.deleteMany({
           where: {
-            project_id: { in: projectIds },
+            project_id: {
+              in: projectIds,
+            },
           },
         });
 
@@ -414,8 +491,7 @@ test("Day 47 workspace role permissions", async (t) => {
         });
       }
 
-      // Delete only the four fictional accounts
-      // generated by this particular test run.
+      // Delete only the four temporary user accounts.
       await prisma.app_users.deleteMany({
         where: {
           email: {
@@ -427,8 +503,11 @@ test("Day 47 workspace role permissions", async (t) => {
       try {
         await new Promise<void>((resolve, reject) => {
           server.close((error) => {
-            if (error) reject(error);
-            else resolve();
+            if (error) {
+              reject(error);
+            } else {
+              resolve();
+            }
           });
         });
       } finally {

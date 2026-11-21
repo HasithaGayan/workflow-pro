@@ -16,16 +16,19 @@ export async function createAuthenticatedClient() {
 
   const email = `regression.${randomUUID()}@example.com`;
   const password = "Regression-Strong-Password-2026!";
-  const workspaceIds: bigint[] = [];
 
+  const workspaceIds: bigint[] = [];
   let cookie = "";
 
   try {
+    // Register a temporary test account.
     const registration = await fetch(
       `${base}/api/auth/register`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           fullName: "Regression Test User",
           email,
@@ -39,38 +42,88 @@ export async function createAuthenticatedClient() {
     const registered = await registration.json();
     const userId: string = registered.data.id;
 
-    const login = await fetch(`${base}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+    // Log in to obtain a real session cookie.
+    const login = await fetch(
+      `${base}/api/auth/login`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      }
+    );
 
     assert.equal(login.status, 200);
 
-    cookie = login.headers.get("set-cookie")
-      ?.split(";")[0] ?? "";
+    cookie =
+      login.headers.get("set-cookie")
+        ?.split(";")[0] ?? "";
 
     assert.ok(cookie, "Session cookie is missing");
 
+    // Reusable authenticated API request.
+    // Automatically fetch a CSRF token for writes.
     async function request(
       method: string,
       path: string,
       body?: unknown
     ): Promise<Response> {
+      const isWrite = ![
+        "GET",
+        "HEAD",
+        "OPTIONS",
+      ].includes(method.toUpperCase());
+
+      let csrfToken: string | undefined;
+
+      if (isWrite) {
+        const csrfResponse = await fetch(
+          `${base}/api/auth/csrf`,
+          {
+            headers: {
+              Cookie: cookie,
+            },
+          }
+        );
+
+        assert.equal(csrfResponse.status, 200);
+
+        const csrfBody = await csrfResponse.json();
+        csrfToken = csrfBody.csrfToken;
+
+        assert.equal(typeof csrfToken, "string");
+        assert.match(csrfToken!, /^[0-9a-f]{64}$/);
+      }
+
       return fetch(`${base}${path}`, {
         method,
         headers: {
           Cookie: cookie,
+
+          ...(csrfToken
+            ? { "X-CSRF-Token": csrfToken }
+            : {}),
+
           ...(body !== undefined
-            ? { "Content-Type": "application/json" }
+            ? {
+                "Content-Type": "application/json",
+              }
             : {}),
         },
+
         ...(body !== undefined
-          ? { body: JSON.stringify(body) }
+          ? {
+              body: JSON.stringify(body),
+            }
           : {}),
       });
     }
 
+    // Track only workspaces created by this test.
     function trackWorkspace(id: string): void {
       workspaceIds.push(BigInt(id));
     }
@@ -79,14 +132,19 @@ export async function createAuthenticatedClient() {
       const response = await request(
         "POST",
         "/api/workspaces",
-        { name: `Regression Workspace ${randomUUID()}` }
+        {
+          name: `Regression Workspace ${randomUUID()}`,
+        }
       );
 
       assert.equal(response.status, 201);
-      const body = await response.json();
 
-      trackWorkspace(body.data.id);
-      return body.data.id;
+      const body = await response.json();
+      const id: string = body.data.id;
+
+      trackWorkspace(id);
+
+      return id;
     }
 
     async function createProject(
@@ -104,16 +162,22 @@ export async function createAuthenticatedClient() {
       assert.equal(response.status, 201);
 
       const body = await response.json();
+
       return body.data.id;
     }
 
+    // Delete only this test's temporary data.
     async function close(): Promise<void> {
       try {
         const projects = await prisma.projects.findMany({
           where: {
-            workspace_id: { in: workspaceIds },
+            workspace_id: {
+              in: workspaceIds,
+            },
           },
-          select: { project_id: true },
+          select: {
+            project_id: true,
+          },
         });
 
         const projectIds = projects.map(
@@ -121,36 +185,52 @@ export async function createAuthenticatedClient() {
         );
 
         await prisma.tasks.deleteMany({
-          where: { project_id: { in: projectIds } },
+          where: {
+            project_id: {
+              in: projectIds,
+            },
+          },
         });
 
         await prisma.projects.deleteMany({
-          where: { project_id: { in: projectIds } },
+          where: {
+            project_id: {
+              in: projectIds,
+            },
+          },
         });
 
         await prisma.workspace_memberships.deleteMany({
           where: {
-            workspace_id: { in: workspaceIds },
+            workspace_id: {
+              in: workspaceIds,
+            },
           },
         });
 
         await prisma.workspaces.deleteMany({
           where: {
-            workspace_id: { in: workspaceIds },
+            workspace_id: {
+              in: workspaceIds,
+            },
           },
         });
 
-        // Deletes this test user's credentials and
-        // sessions through foreign-key cascades.
+        // PostgreSQL cascades credentials and sessions.
         await prisma.app_users.deleteMany({
-          where: { email },
+          where: {
+            email,
+          },
         });
       } finally {
         try {
           await new Promise<void>((resolve, reject) => {
             server.close((error) => {
-              if (error) reject(error);
-              else resolve();
+              if (error) {
+                reject(error);
+              } else {
+                resolve();
+              }
             });
           });
         } finally {
@@ -174,6 +254,7 @@ export async function createAuthenticatedClient() {
     });
 
     await prisma.$disconnect();
+
     throw error;
   }
 }

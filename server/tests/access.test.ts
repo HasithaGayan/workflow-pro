@@ -1,6 +1,7 @@
 
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
 
@@ -27,30 +28,69 @@ test("Day 47 workspace authorization", async (t) => {
   let taskA = 0;
 
   try {
-    await new Promise<void>((resolve, reject) => {
-      server.once("listening", resolve);
-      server.once("error", reject);
-    });
+    await once(server, "listening");
 
     const address = server.address() as AddressInfo;
     const base = `http://127.0.0.1:${address.port}`;
 
-    function request(
+    // Automatically add CSRF protection whenever
+    // an authenticated user changes data.
+    async function request(
       path: string,
       method = "GET",
       body?: unknown,
       cookie?: string
-    ) {
+    ): Promise<Response> {
+      const isWrite = ![
+        "GET",
+        "HEAD",
+        "OPTIONS",
+      ].includes(method.toUpperCase());
+
+      let csrfToken: string | undefined;
+
+      if (isWrite && cookie) {
+        const csrfResponse = await fetch(
+          `${base}/api/auth/csrf`,
+          {
+            headers: {
+              Cookie: cookie,
+            },
+          }
+        );
+
+        assert.equal(csrfResponse.status, 200);
+
+        const csrfBody = await csrfResponse.json();
+
+        csrfToken = csrfBody.csrfToken;
+
+        assert.equal(typeof csrfToken, "string");
+        assert.match(csrfToken!, /^[0-9a-f]{64}$/);
+      }
+
       return fetch(`${base}${path}`, {
         method,
         headers: {
           ...(body !== undefined
-            ? { "Content-Type": "application/json" }
+            ? {
+                "Content-Type": "application/json",
+              }
             : {}),
-          ...(cookie ? { Cookie: cookie } : {}),
+
+          ...(cookie
+            ? { Cookie: cookie }
+            : {}),
+
+          ...(csrfToken
+            ? { "X-CSRF-Token": csrfToken }
+            : {}),
         },
+
         ...(body !== undefined
-          ? { body: JSON.stringify(body) }
+          ? {
+              body: JSON.stringify(body),
+            }
           : {}),
       });
     }
@@ -62,7 +102,11 @@ test("Day 47 workspace authorization", async (t) => {
       const registration = await request(
         "/api/auth/register",
         "POST",
-        { fullName, email, password }
+        {
+          fullName,
+          email,
+          password,
+        }
       );
 
       assert.equal(registration.status, 201);
@@ -70,7 +114,10 @@ test("Day 47 workspace authorization", async (t) => {
       const login = await request(
         "/api/auth/login",
         "POST",
-        { email, password }
+        {
+          email,
+          password,
+        }
       );
 
       assert.equal(login.status, 200);
@@ -80,13 +127,17 @@ test("Day 47 workspace authorization", async (t) => {
         ?.split(";")[0];
 
       assert.ok(cookie);
+
       return cookie;
     }
 
     await t.test(
       "Anonymous users cannot access tasks",
       async () => {
-        const response = await request("/api/tasks");
+        const response = await request(
+          "/api/tasks"
+        );
+
         assert.equal(response.status, 401);
       }
     );
@@ -114,17 +165,24 @@ test("Day 47 workspace authorization", async (t) => {
         const responseA = await request(
           "/api/workspaces",
           "POST",
-          { name: workspaceNameA },
+          {
+            name: workspaceNameA,
+          },
           cookieA
         );
 
         assert.equal(responseA.status, 201);
-        workspaceA = (await responseA.json()).data.id;
+
+        workspaceA = (
+          await responseA.json()
+        ).data.id;
 
         const responseB = await request(
           "/api/workspaces",
           "POST",
-          { name: workspaceNameB },
+          {
+            name: workspaceNameB,
+          },
           cookieB
         );
 
@@ -146,7 +204,10 @@ test("Day 47 workspace authorization", async (t) => {
         );
 
         assert.equal(response.status, 201);
-        projectA = (await response.json()).data.id;
+
+        projectA = (
+          await response.json()
+        ).data.id;
       }
     );
 
@@ -181,7 +242,11 @@ test("Day 47 workspace authorization", async (t) => {
         );
 
         assert.equal(response.status, 201);
-        taskA = (await response.json()).data.id;
+
+        taskA = (
+          await response.json()
+        ).data.id;
+
         assert.ok(taskA);
       }
     );
@@ -201,7 +266,9 @@ test("Day 47 workspace authorization", async (t) => {
         const update = await request(
           `/api/tasks/${taskA}`,
           "PATCH",
-          { status: "done" },
+          {
+            status: "done",
+          },
           cookieB
         );
 
@@ -235,7 +302,8 @@ test("Day 47 workspace authorization", async (t) => {
 
         assert.equal(ownerResponse.status, 200);
 
-        const ownerBody = await ownerResponse.json();
+        const ownerBody =
+          await ownerResponse.json();
 
         assert.ok(
           ownerBody.data.some(
@@ -281,15 +349,19 @@ test("Day 47 workspace authorization", async (t) => {
     );
   } finally {
     try {
-      // Clean up ONLY the unique workspaces
-      // and accounts created by this test.
+      // Clean up only the two temporary workspaces.
       const workspaces = await prisma.workspaces.findMany({
         where: {
           name: {
-            in: [workspaceNameA, workspaceNameB],
+            in: [
+              workspaceNameA,
+              workspaceNameB,
+            ],
           },
         },
-        select: { workspace_id: true },
+        select: {
+          workspace_id: true,
+        },
       });
 
       const workspaceIds = workspaces.map(
@@ -298,9 +370,13 @@ test("Day 47 workspace authorization", async (t) => {
 
       const projects = await prisma.projects.findMany({
         where: {
-          workspace_id: { in: workspaceIds },
+          workspace_id: {
+            in: workspaceIds,
+          },
         },
-        select: { project_id: true },
+        select: {
+          project_id: true,
+        },
       });
 
       const projectIds = projects.map(
@@ -309,42 +385,58 @@ test("Day 47 workspace authorization", async (t) => {
 
       await prisma.tasks.deleteMany({
         where: {
-          project_id: { in: projectIds },
+          project_id: {
+            in: projectIds,
+          },
         },
       });
 
       await prisma.projects.deleteMany({
         where: {
-          project_id: { in: projectIds },
+          project_id: {
+            in: projectIds,
+          },
         },
       });
 
       await prisma.workspace_memberships.deleteMany({
         where: {
-          workspace_id: { in: workspaceIds },
+          workspace_id: {
+            in: workspaceIds,
+          },
         },
       });
 
       await prisma.workspaces.deleteMany({
         where: {
-          workspace_id: { in: workspaceIds },
+          workspace_id: {
+            in: workspaceIds,
+          },
         },
       });
 
+      // Remove only the temporary users.
       await prisma.app_users.deleteMany({
         where: {
-          email: { in: [emailA, emailB] },
+          email: {
+            in: [emailA, emailB],
+          },
         },
       });
     } finally {
-      await new Promise<void>((resolve, reject) => {
-        server.close((error) => {
-          if (error) reject(error);
-          else resolve();
+      try {
+        await new Promise<void>((resolve, reject) => {
+          server.close((error) => {
+            if (error) {
+              reject(error);
+            } else {
+              resolve();
+            }
+          });
         });
-      });
-
-      await prisma.$disconnect();
+      } finally {
+        await prisma.$disconnect();
+      }
     }
   }
 });

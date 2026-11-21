@@ -14,7 +14,8 @@
     "test:auth": "node --import=tsx --test tests/auth.test.ts",
     "test:access": "node --import=tsx --test tests/access.test.ts",
     "test:roles": "node --import=tsx --test tests/roles.test.ts",
-    "test:security": "node --import=tsx --test tests/security.test.ts"
+    "test:security": "node --import=tsx --test tests/security.test.ts",
+    "test:csrf": "node --import=tsx --test tests/csrf.test.ts"
   },
   "keywords": [],
   "author": "",
