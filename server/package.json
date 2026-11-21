@@ -12,7 +12,8 @@
     "test:write": "node --import=tsx --test tests/task-write.test.ts",
     "test:teams": "node --import=tsx --test tests/team.test.ts",
     "test:auth": "node --import=tsx --test tests/auth.test.ts",
-    "test:access": "node --import=tsx --test tests/access.test.ts"
+    "test:access": "node --import=tsx --test tests/access.test.ts",
+    "test:roles": "node --import=tsx --test tests/roles.test.ts"
   },
   "keywords": [],
   "author": "",
