@@ -13,6 +13,8 @@ model app_users {
   full_name             String                  @db.VarChar(120)
   email                 String                  @unique @db.VarChar(255)
   created_at            DateTime                @default(now()) @db.Timestamptz(6)
+  auth_credentials      auth_credentials?
+  auth_sessions         auth_sessions[]
   tasks                 tasks[]
   workspace_memberships workspace_memberships[]
 }
@@ -60,4 +62,24 @@ model workspaces {
   created_at            DateTime                @default(now()) @db.Timestamptz(6)
   projects              projects[]
   workspace_memberships workspace_memberships[]
+}
+
+model auth_credentials {
+  user_id       BigInt    @id
+  password_hash String
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+  app_users     app_users @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model auth_sessions {
+  session_id BigInt    @id @default(autoincrement())
+  user_id    BigInt
+  token_hash String    @unique @db.VarChar(64)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at DateTime  @db.Timestamptz(6)
+  app_users  app_users @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([expires_at], map: "idx_auth_sessions_expiry")
+  @@index([user_id], map: "idx_auth_sessions_user")
 }
