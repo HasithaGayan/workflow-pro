@@ -1,6 +1,10 @@
 import express from "express";
 import { randomUUID } from "node:crypto";
 import { taskRoutes } from "./routes/taskRoutes";
+import {
+  workspaceRoutes,
+  projectRoutes,
+} from "./routes/teamRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 
 export const app = express();
@@ -35,6 +39,10 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/tasks", taskRoutes);
+
+// NEW: Workspace and Project routes
+app.use("/api/workspaces", workspaceRoutes);
+app.use("/api/projects", projectRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({

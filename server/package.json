@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "test:api": "node --import=tsx --test tests/api.test.ts",
     "db:generate": "prisma generate",
-    "test:write": "node --import=tsx --test tests/task-write.test.ts"
+    "test:write": "node --import=tsx --test tests/task-write.test.ts",
+    "test:teams": "node --import=tsx --test tests/team.test.ts"
   },
   "keywords": [],
   "author": "",
