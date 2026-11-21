@@ -11,6 +11,13 @@ import {
 
 import { authRoutes } from "./routes/authRoutes";
 
+import {
+  requireLogin,
+  secureWorkspaces,
+  secureProjects,
+  secureTasks,
+} from "./middleware/accessControl";
+
 import { errorHandler } from "./middleware/errorHandler";
 
 export const app = express();
@@ -37,6 +44,7 @@ app.use((req, res, next) => {
   next();
 });
 
+// Public health endpoint
 app.get("/api/health", (_req, res) => {
   res.status(200).json({
     status: "ok",
@@ -44,15 +52,34 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-// Existing Day 41–45 routes
-app.use("/api/tasks", taskRoutes);
-app.use("/api/workspaces", workspaceRoutes);
-app.use("/api/projects", projectRoutes);
-
-// Day 46 — Authentication
+// Day 46: public registration/login,
+// authenticated profile and logout.
 app.use("/api/auth", authRoutes);
 
-// Unknown route
+// Day 47: all business routes require login
+// and resource-specific authorization.
+app.use(
+  "/api/tasks",
+  requireLogin,
+  secureTasks,
+  taskRoutes
+);
+
+app.use(
+  "/api/workspaces",
+  requireLogin,
+  secureWorkspaces,
+  workspaceRoutes
+);
+
+app.use(
+  "/api/projects",
+  requireLogin,
+  secureProjects,
+  projectRoutes
+);
+
+// Unknown routes
 app.use((_req, res) => {
   res.status(404).json({
     success: false,
@@ -60,5 +87,5 @@ app.use((_req, res) => {
   });
 });
 
-// Existing error handler
+// Central error handler
 app.use(errorHandler);

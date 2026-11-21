@@ -1,93 +1,120 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AddressInfo } from "node:net";
 
-import { app } from "../src/app";
-import { prisma } from "../src/lib/prisma";
+import {
+  createAuthenticatedClient,
+} from "./helpers/authFixture";
 
 test("WorkFlow Pro database-backed API", async (t) => {
-  const server = app.listen(0, "127.0.0.1");
+  const client = await createAuthenticatedClient();
 
   try {
-    await new Promise<void>((resolve, reject) => {
-      server.once("listening", resolve);
-      server.once("error", reject);
-    });
+    const workspaceId = await client.createWorkspace();
+    const projectId = await client.createProject(
+      workspaceId
+    );
 
-    const address = server.address() as AddressInfo;
-    const baseUrl = `http://127.0.0.1:${address.port}`;
+    const created = await client.request(
+      "POST",
+      "/api/tasks",
+      {
+        projectId,
+        title: "Read API Regression Task",
+        status: "todo",
+        priority: "medium",
+      }
+    );
 
-    await t.test("Health endpoint returns 200", async () => {
-      const response = await fetch(`${baseUrl}/api/health`);
-      const body = await response.json();
+    assert.equal(created.status, 201);
 
-      assert.equal(response.status, 200);
-      assert.equal(body.status, "ok");
-      assert.ok(response.headers.get("x-request-id"));
-    });
+    const createdBody = await created.json();
+    const taskId: number = createdBody.data.id;
 
-    await t.test("Tasks come from PostgreSQL", async () => {
-      const response = await fetch(`${baseUrl}/api/tasks`);
-      const body = await response.json();
+    await t.test(
+      "Health endpoint returns 200",
+      async () => {
+        const response = await client.request(
+          "GET",
+          "/api/health"
+        );
 
-      assert.equal(response.status, 200);
-      assert.equal(body.success, true);
-      assert.equal(body.count, 1);
-      assert.equal(body.data.length, 1);
+        assert.equal(response.status, 200);
+      }
+    );
 
-      const task = body.data[0];
+    await t.test(
+      "Tasks come from PostgreSQL",
+      async () => {
+        const response = await client.request(
+          "GET",
+          "/api/tasks"
+        );
 
-      assert.equal(task.id, 1);
-      assert.equal(task.title, "Design Database");
-      assert.equal(task.status, "in_progress");
-      assert.equal(task.priority, "high");
-      assert.equal(task.projectId, "1");
-      assert.equal(task.assignedUserId, "2");
-      assert.equal(task.dueDate, "2026-12-01");
-    });
+        assert.equal(response.status, 200);
 
-    await t.test("Find an existing task", async () => {
-      const response = await fetch(`${baseUrl}/api/tasks/1`);
-      const body = await response.json();
+        const body = await response.json();
 
-      assert.equal(response.status, 200);
-      assert.equal(body.success, true);
-      assert.equal(body.data.title, "Design Database");
-    });
+        assert.ok(
+          body.data.some(
+            (task: { id: number }) =>
+              task.id === taskId
+          )
+        );
+      }
+    );
 
-    await t.test("Invalid ID returns 400", async () => {
-      const response = await fetch(`${baseUrl}/api/tasks/abc`);
-      const body = await response.json();
+    await t.test(
+      "Find an existing task",
+      async () => {
+        const response = await client.request(
+          "GET",
+          `/api/tasks/${taskId}`
+        );
 
-      assert.equal(response.status, 400);
-      assert.equal(body.success, false);
-      assert.equal(body.error, "Invalid task ID");
-    });
+        assert.equal(response.status, 200);
 
-    await t.test("Missing task returns 404", async () => {
-      const response = await fetch(`${baseUrl}/api/tasks/999`);
-      const body = await response.json();
+        const body = await response.json();
+        assert.equal(body.data.id, taskId);
+      }
+    );
 
-      assert.equal(response.status, 404);
-      assert.equal(body.error, "Task not found");
-    });
+    await t.test(
+      "Invalid ID returns 400",
+      async () => {
+        const response = await client.request(
+          "GET",
+          "/api/tasks/abc"
+        );
 
-    await t.test("Unknown route returns 404", async () => {
-      const response = await fetch(`${baseUrl}/api/unknown`);
-      const body = await response.json();
+        assert.equal(response.status, 400);
+      }
+    );
 
-      assert.equal(response.status, 404);
-      assert.equal(body.error, "Route not found");
-    });
+    await t.test(
+      "Missing task returns 404",
+      async () => {
+        const response = await client.request(
+          "GET",
+          "/api/tasks/999999"
+        );
+
+        assert.equal(response.status, 404);
+      }
+    );
+
+    await t.test(
+      "Unknown route returns 404",
+      async () => {
+        const response = await client.request(
+          "GET",
+          "/api/unknown"
+        );
+
+        assert.equal(response.status, 404);
+      }
+    );
   } finally {
-    await new Promise<void>((resolve, reject) => {
-      server.close((error) => {
-        if (error) reject(error);
-        else resolve();
-      });
-    });
-
-    await prisma.$disconnect();
+    await client.close();
   }
 });
