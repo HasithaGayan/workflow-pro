@@ -1,25 +1,40 @@
 
-import type { Request, Response } from "express";
+import type {
+  Request,
+  Response,
+  NextFunction,
+} from "express";
+
 import {
   getAllTasks,
   findTaskById,
 } from "../services/taskService";
 
-export function listTasks(_req: Request, res: Response): void {
-  const tasks = getAllTasks();
+export async function listTasks(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const tasks = await getAllTasks();
 
-  res.status(200).json({
-    success: true,
-    count: tasks.length,
-    data: tasks,
-  });
+    res.status(200).json({
+      success: true,
+      count: tasks.length,
+      data: tasks,
+    });
+  } catch (error) {
+    next(error);
+  }
 }
 
-export function getTaskDetails(req: Request, res: Response): void {
+export async function getTaskDetails(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
   const rawId = req.params.id;
 
-  // A task ID must be exactly one string containing
-  // a positive integer without leading zeros.
   if (
     typeof rawId !== "string" ||
     !/^[1-9]\d*$/.test(rawId)
@@ -41,18 +56,22 @@ export function getTaskDetails(req: Request, res: Response): void {
     return;
   }
 
-  const task = findTaskById(id);
+  try {
+    const task = await findTaskById(id);
 
-  if (!task) {
-    res.status(404).json({
-      success: false,
-      error: "Task not found",
+    if (!task) {
+      res.status(404).json({
+        success: false,
+        error: "Task not found",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: task,
     });
-    return;
+  } catch (error) {
+    next(error);
   }
-
-  res.status(200).json({
-    success: true,
-    data: task,
-  });
 }

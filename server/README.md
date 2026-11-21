@@ -74,3 +74,22 @@ including successful requests and error responses.
 - This API is not yet deployed for public use.
 
 These features will be implemented in future milestones.
+
+## PostgreSQL and Prisma Setup
+
+1. Install PostgreSQL and create the development database.
+2. Configure server/.env with a private DATABASE_URL.
+3. From server/, run npm install.
+4. Run npm run db:generate to generate Prisma Client.
+5. Run npm run typecheck and npm run test:api.
+6. Run npm run dev to start the API.
+
+Database: workflow_pro_dev
+
+The database schema and SQL practice are documented in db/.
+
+API integration tests currently require the fictional Day 42
+development records. They are not yet isolated test fixtures.
+
+Never commit .env, database credentials or database backups.
+Do not reset the existing database during setup.

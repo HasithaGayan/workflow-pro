@@ -6,3 +6,9 @@ node_modules/
 dist/
 coverage/
 *.log
+
+/generated/prisma
+.agents/
+.claude/
+.windsurf/
+skills-lock.json
