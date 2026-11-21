@@ -1,6 +1,7 @@
 
 .page {
   min-height: 100vh;
+  width: 100%;
   padding: 56px 20px;
   background:
     radial-gradient(circle at 10% 10%, #253a75 0, transparent 34%),
@@ -23,9 +24,9 @@
 }
 
 .panel {
+  padding: 32px;
   border: 1px solid #26334d;
   border-radius: 22px;
-  padding: 32px;
   background: #111b30;
   box-shadow: 0 20px 60px #00000033;
 }
@@ -35,17 +36,16 @@
   align-items: center;
   gap: 12px;
   margin-bottom: 25px;
+  color: #ffffff;
   font-size: 19px;
   font-weight: 800;
-  letter-spacing: -0.5px;
-  color: #ffffff;
 }
 
 .logo {
   display: grid;
-  place-items: center;
   width: 40px;
   height: 40px;
+  place-items: center;
   border-radius: 12px;
   background: #6366f1;
   color: white;
@@ -63,11 +63,11 @@
 
 .title {
   margin: 0 0 12px;
-  font-size: clamp(26px, 4vw, 38px);
-  line-height: 1.2;
-  font-weight: 800;
-  letter-spacing: -1px;
   color: #ffffff;
+  font-size: clamp(26px, 4vw, 38px);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -1px;
 }
 
 .subtitle {
@@ -88,20 +88,21 @@
 }
 
 .label {
+  color: #dce5f8;
   font-size: 13px;
   font-weight: 700;
-  color: #dce5f8;
 }
 
 .input {
   width: 100%;
+  min-width: 0;
   padding: 13px 15px;
   border: 1px solid #33445f;
   border-radius: 11px;
+  outline: none;
   background: #0a1426;
   color: #ffffff;
   font: inherit;
-  outline: none;
 }
 
 .input::placeholder {
@@ -119,11 +120,10 @@
   border: 0;
   border-radius: 11px;
   background: #6366f1;
-  color: white;
+  color: #ffffff;
   font: inherit;
   font-weight: 750;
   cursor: pointer;
-  transition: background 0.2s;
 }
 
 .button:hover {
@@ -152,9 +152,9 @@
 
 .footer {
   margin-top: 24px;
-  text-align: center;
   color: #a7b5cf;
   font-size: 14px;
+  text-align: center;
 }
 
 .link {
@@ -221,16 +221,16 @@
 
 .statValue {
   margin: 0;
+  color: #ffffff;
   font-size: 30px;
   font-weight: 800;
-  color: white;
 }
 
 .sectionTitle {
   margin: 0 0 20px;
+  color: #ffffff;
   font-size: 23px;
   font-weight: 750;
-  color: white;
 }
 
 .workspaceList {
@@ -248,9 +248,9 @@
 
 .workspaceName {
   margin: 0 0 8px;
+  color: #ffffff;
   font-size: 18px;
   font-weight: 750;
-  color: #ffffff;
 }
 
 .muted {
@@ -267,7 +267,6 @@
 
 .createRow .input {
   flex: 1;
-  min-width: 0;
 }
 
 .createRow .button {
