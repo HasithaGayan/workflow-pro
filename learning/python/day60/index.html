@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>HGBP Student Score App</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #0b1020;
+            color: white;
+        }
+
+        .container {
+            max-width: 520px;
+            margin: 60px auto;
+            padding: 30px;
+            background: #18223a;
+            border-radius: 16px;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        p {
+            color: #a5b4fc;
+            text-align: center;
+        }
+
+        label {
+            display: block;
+            margin-top: 20px;
+            margin-bottom: 8px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #64748b;
+            border-radius: 8px;
+            background: #0b1020;
+            color: white;
+            font-size: 16px;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            margin-top: 20px;
+            border: none;
+            border-radius: 8px;
+            background: #7468f6;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
+
+        .secondary {
+            background: #334155;
+        }
+
+        #result {
+            margin-top: 25px;
+            padding: 18px;
+            background: #0b1020;
+            border-radius: 8px;
+            min-height: 50px;
+            white-space: pre-wrap;
+            line-height: 1.8;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                margin: 20px 12px;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+
+        <h1>🎓 Student Score App</h1>
+
+        <p>Day 60 - JavaScript + Python FastAPI</p>
+
+        <form id="scoreForm">
+
+            <label for="student">Student Name</label>
+
+            <input
+                type="text"
+                id="student"
+                placeholder="Enter student name"
+                minlength="2"
+                maxlength="100"
+                required
+            >
+
+            <label for="mark">Student Mark</label>
+
+            <input
+                type="number"
+                id="mark"
+                placeholder="Enter mark (0-100)"
+                min="0"
+                max="100"
+                step="any"
+                required
+            >
+
+            <button
+                type="submit"
+                id="submitButton"
+            >
+                Calculate Result
+            </button>
+
+        </form>
+
+        <button
+            type="button"
+            id="healthButton"
+            class="secondary"
+        >
+            Check Python API
+        </button>
+
+        <div
+            id="result"
+            role="status"
+            aria-live="polite"
+        >
+            Ready to connect to FastAPI.
+        </div>
+
+    </div>
+
+    <script>
+
+        const API = "http://127.0.0.1:8011";
+
+        const form = document.getElementById(
+            "scoreForm"
+        );
+
+        const result = document.getElementById(
+            "result"
+        );
+
+        const submitButton = document.getElementById(
+            "submitButton"
+        );
+
+        const healthButton = document.getElementById(
+            "healthButton"
+        );
+
+
+        async function request(path, options = {}) {
+
+            const response = await fetch(
+                API + path,
+                options
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    "HTTP " + response.status + ": " +
+                    JSON.stringify(data.detail || data)
+                );
+            }
+
+            return data;
+        }
+
+
+        healthButton.addEventListener(
+            "click",
+            async () => {
+
+                healthButton.disabled = true;
+
+                result.textContent =
+                    "Checking Python API...";
+
+                try {
+
+                    const data = await request(
+                        "/health"
+                    );
+
+                    result.textContent =
+                        "✅ Python API: " + data.status;
+
+                } catch (error) {
+
+                    result.textContent =
+                        "❌ API Error: " + error.message;
+
+                } finally {
+
+                    healthButton.disabled = false;
+
+                }
+
+            }
+        );
+
+
+        form.addEventListener(
+            "submit",
+            async (event) => {
+
+                event.preventDefault();
+
+                submitButton.disabled = true;
+
+                result.textContent = "Calculating...";
+
+                const studentName =
+                    document.getElementById(
+                        "student"
+                    ).value.trim();
+
+                const mark = Number(
+                    document.getElementById(
+                        "mark"
+                    ).value
+                );
+
+                const body = {
+                    student_name: studentName,
+                    mark: mark
+                };
+
+                try {
+
+                    const data = await request(
+                        "/scores",
+                        {
+                            method: "POST",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+
+                            body: JSON.stringify(body)
+                        }
+                    );
+
+                    const finalResult = data.passed
+                        ? "PASS ✅"
+                        : "FAIL ❌";
+
+                    result.textContent =
+                        "Student: " + data.student_name +
+                        "\nMark: " + data.mark +
+                        "\nResult: " + finalResult +
+                        "\nRecord ID: " + data.id;
+
+                } catch (error) {
+
+                    result.textContent =
+                        "❌ Request Failed: " +
+                        error.message;
+
+                } finally {
+
+                    submitButton.disabled = false;
+
+                }
+
+            }
+        );
+
+    </script>
+
+</body>
+</html>
