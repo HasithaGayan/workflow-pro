@@ -1,0 +1,96 @@
+name: WorkFlow Pro - Day 82 CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workflow-pro-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-checks:
+    name: Source quality and builds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Lint frontend
+        run: npm run lint
+      - name: Build Next.js frontend
+        run: npm run build
+      - name: Install backend dependencies
+        working-directory: server
+        run: npm ci --no-audit --no-fund
+      - name: Generate Prisma client for backend type-checking
+        working-directory: server
+        env:
+          # A syntactically valid placeholder; no database connection is made by generate.
+          DATABASE_URL: postgresql://ci_user:placeholder@127.0.0.1:5432/ci_db?schema=public
+        run: npm run db:generate
+      - name: Type-check backend
+        working-directory: server
+        env:
+          DATABASE_URL: postgresql://ci_user:placeholder@127.0.0.1:5432/ci_db?schema=public
+        run: npm run typecheck
+
+  docker-integration:
+    name: Isolated Docker integration and persistence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js 22 for HTTP smoke tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Generate ephemeral database password
+        shell: bash
+        run: |
+          umask 077
+          printf 'DAY81_POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 32)" > day81/.env
+          test -s day81/.env
+      - name: Build and start isolated Docker stack
+        run: docker compose --env-file day81/.env -f compose.day81.yaml up --build -d --wait
+      - name: Run live Docker security and HTTP tests
+        run: node --test tests/day81-docker-smoke.test.mjs tests/day81-origin-proxy.test.mjs
+      - name: Verify database volume survives a stack restart
+        shell: bash
+        run: |
+          set -euo pipefail
+          dc=(docker compose --env-file day81/.env -f compose.day81.yaml)
+          "${dc[@]}" exec -T db psql -v ON_ERROR_STOP=1 -U workflow_day81 -d workflow_day81 -c 'CREATE TABLE IF NOT EXISTS ci_persistence_probe (id integer PRIMARY KEY);'
+          "${dc[@]}" exec -T db psql -v ON_ERROR_STOP=1 -U workflow_day81 -d workflow_day81 -c 'INSERT INTO ci_persistence_probe (id) VALUES (82) ON CONFLICT (id) DO NOTHING;'
+          "${dc[@]}" down
+          "${dc[@]}" up -d --wait
+          actual="$("${dc[@]}" exec -T db psql -v ON_ERROR_STOP=1 -U workflow_day81 -d workflow_day81 -Atc 'SELECT COUNT(*) FROM ci_persistence_probe WHERE id = 82;')"
+          if [ "$actual" != '1' ]; then
+            echo 'Database persistence check FAILED' >&2
+            exit 1
+          fi
+          echo 'Database persistence verified after container restart.'
+          node --test tests/day81-docker-smoke.test.mjs tests/day81-origin-proxy.test.mjs
+      - name: Print safe diagnostic logs when a test fails
+        if: failure()
+        run: docker compose --env-file day81/.env -f compose.day81.yaml logs --tail=90 web api db
+      - name: Stop temporary containers without deleting volumes
+        if: always()
+        run: docker compose --env-file day81/.env -f compose.day81.yaml down
