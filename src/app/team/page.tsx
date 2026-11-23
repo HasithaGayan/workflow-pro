@@ -175,6 +175,7 @@ export default function TeamPage() {
         setWorkspaces(available);
 
         if (available.length > 0) {
+          setMembersLoading(true);
           setWorkspaceId(String(available[0].id));
         }
       } catch (err) {
@@ -204,16 +205,7 @@ export default function TeamPage() {
   useEffect(() => {
     let active = true;
 
-    setMembers([]);
-    setError("");
-    setSuccess("");
-
-    if (!workspaceId) {
-      setMembersLoading(false);
-      return;
-    }
-
-    setMembersLoading(true);
+    if (!workspaceId) return;
 
     async function loadMembers() {
       try {
@@ -427,9 +419,15 @@ export default function TeamPage() {
             <select
               value={workspaceId}
               disabled={busy !== null}
-              onChange={(event) =>
-                setWorkspaceId(event.target.value)
-              }
+              onChange={(event) => {
+                const nextId = event.target.value;
+                if (nextId === workspaceId) return;
+                setMembers([]);
+                setError("");
+                setSuccess("");
+                setMembersLoading(Boolean(nextId));
+                setWorkspaceId(nextId);
+              }}
             >
               {workspaces.length === 0 && (
                 <option value="">No workspaces</option>

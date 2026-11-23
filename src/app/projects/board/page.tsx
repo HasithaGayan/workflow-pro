@@ -219,6 +219,7 @@ export default function TaskBoardPage() {
         setWorkspaces(items);
 
         if (items.length > 0) {
+          setBoardLoading(true);
           setWorkspaceId(String(items[0].id));
         }
       } catch (err) {
@@ -251,19 +252,7 @@ export default function TaskBoardPage() {
   useEffect(() => {
     let active = true;
 
-    setProjects([]);
-    setTasks([]);
-    setProjectFilter("all");
-    setSearch("");
-    setError("");
-    setNotice("");
-
-    if (!workspaceId) {
-      setBoardLoading(false);
-      return;
-    }
-
-    setBoardLoading(true);
+    if (!workspaceId) return;
 
     async function loadBoard() {
       try {
@@ -534,9 +523,18 @@ export default function TaskBoardPage() {
             <select
               value={workspaceId}
               disabled={savingTaskId !== null}
-              onChange={(event) =>
-                setWorkspaceId(event.target.value)
-              }
+              onChange={(event) => {
+                const nextId = event.target.value;
+                if (nextId === workspaceId) return;
+                setProjects([]);
+                setTasks([]);
+                setProjectFilter("all");
+                setSearch("");
+                setError("");
+                setNotice("");
+                setBoardLoading(Boolean(nextId));
+                setWorkspaceId(nextId);
+              }}
             >
               {workspaces.length === 0 && (
                 <option value="">

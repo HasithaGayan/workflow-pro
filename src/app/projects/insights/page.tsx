@@ -166,6 +166,7 @@ export default function TaskInsightsPage() {
         setWorkspaces(available);
 
         if (available.length > 0) {
+          setTaskLoading(true);
           setWorkspaceId(String(available[0].id));
         }
       } catch (err) {
@@ -198,18 +199,7 @@ export default function TaskInsightsPage() {
   useEffect(() => {
     let active = true;
 
-    setProjects([]);
-    setTasks([]);
-    setProjectFilter("all");
-    setError("");
-    setNotice("");
-
-    if (!workspaceId) {
-      setTaskLoading(false);
-      return;
-    }
-
-    setTaskLoading(true);
+    if (!workspaceId) return;
 
     async function loadWorkspaceTasks() {
       try {
@@ -478,7 +468,7 @@ export default function TaskInsightsPage() {
             </h1>
             <p className={styles.muted}>
               Manage priorities, track completion and
-              find your team's tasks quickly.
+              find your team&apos;s tasks quickly.
             </p>
           </div>
 
@@ -495,9 +485,17 @@ export default function TaskInsightsPage() {
             <span>Workspace</span>
             <select
               value={workspaceId}
-              onChange={(event) =>
-                setWorkspaceId(event.target.value)
-              }
+              onChange={(event) => {
+                const nextId = event.target.value;
+                if (nextId === workspaceId) return;
+                setProjects([]);
+                setTasks([]);
+                setProjectFilter("all");
+                setError("");
+                setNotice("");
+                setTaskLoading(Boolean(nextId));
+                setWorkspaceId(nextId);
+              }}
             >
               {workspaces.length === 0 && (
                 <option value="">

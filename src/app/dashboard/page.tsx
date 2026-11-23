@@ -409,7 +409,7 @@ export default function DashboardPage() {
 
           {workspaces.length === 0 ? (
             <div className={styles.empty}>
-              You don't have any workspaces yet.
+              You don&apos;t have any workspaces yet.
               Create your first workspace above.
             </div>
           ) : (

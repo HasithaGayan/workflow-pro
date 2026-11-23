@@ -2,6 +2,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useState,
 } from "react";
@@ -168,7 +169,7 @@ export default function ProjectsPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  function handleError(err: unknown): void {
+  const handleError = useCallback((err: unknown): void => {
     if (
       err instanceof ApiFailure &&
       err.status === 401
@@ -182,7 +183,7 @@ export default function ProjectsPage() {
         ? err.message
         : "An unexpected error occurred"
     );
-  }
+  }, [router]);
 
   // Step 1: Verify the session and load workspaces.
   useEffect(() => {
@@ -208,6 +209,7 @@ export default function ProjectsPage() {
         setWorkspaces(result.data ?? []);
 
         if (result.data?.length) {
+          setLoadingProjects(true);
           setWorkspaceId(result.data[0].id);
         }
       } catch (err) {
@@ -241,16 +243,7 @@ export default function ProjectsPage() {
   useEffect(() => {
     let active = true;
 
-    setProjects([]);
-    setProjectId("");
-    setTasks([]);
-
-    if (!workspaceId) {
-      setLoadingProjects(false);
-      return;
-    }
-
-    setLoadingProjects(true);
+    if (!workspaceId) return;
 
     async function loadProjects() {
       try {
@@ -266,6 +259,7 @@ export default function ProjectsPage() {
         setProjects(items);
 
         if (items.length > 0) {
+          setLoadingTasks(true);
           setProjectId(items[0].id);
         }
       } catch (err) {
@@ -280,20 +274,13 @@ export default function ProjectsPage() {
     return () => {
       active = false;
     };
-  }, [workspaceId]);
+  }, [workspaceId, handleError]);
 
   // Step 3: Load tasks for the selected project.
   useEffect(() => {
     let active = true;
 
-    setTasks([]);
-
-    if (!projectId) {
-      setLoadingTasks(false);
-      return;
-    }
-
-    setLoadingTasks(true);
+    if (!projectId) return;
 
     async function loadTasks() {
       try {
@@ -316,7 +303,7 @@ export default function ProjectsPage() {
     return () => {
       active = false;
     };
-  }, [projectId]);
+  }, [projectId, handleError]);
 
   async function createProject(
     event: FormEvent<HTMLFormElement>
@@ -358,6 +345,8 @@ export default function ProjectsPage() {
         result.data!,
       ]);
 
+      setTasks([]);
+      setLoadingTasks(true);
       setProjectId(result.data.id);
       setProjectName("");
 
@@ -547,7 +536,7 @@ export default function ProjectsPage() {
           </p>
 
           <h1 className={styles.heading}>
-            Manage your team's work
+            Manage your team&apos;s work
           </h1>
 
           <p className={styles.muted}>
@@ -623,9 +612,14 @@ export default function ProjectsPage() {
               onChange={(event) => {
                 setError("");
                 setSuccess("");
-                setWorkspaceId(
-                  event.target.value
-                );
+                const nextId = event.target.value;
+                if (nextId === workspaceId) return;
+                setProjects([]);
+                setProjectId("");
+                setTasks([]);
+                setLoadingTasks(false);
+                setLoadingProjects(Boolean(nextId));
+                setWorkspaceId(nextId);
               }}
             >
               {workspaces.length === 0 && (
@@ -726,6 +720,9 @@ export default function ProjectsPage() {
                     onClick={() => {
                       setError("");
                       setSuccess("");
+                      if (projectId === project.id) return;
+                      setTasks([]);
+                      setLoadingTasks(true);
                       setProjectId(project.id);
                     }}
                   >

@@ -4,6 +4,7 @@ export const errorHandler: ErrorRequestHandler = (
   error,
   _req,
   res,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Express error middleware requires four parameters.
   _next
 ) => {
   const reportedStatus =
