@@ -1,0 +1,74 @@
+# Private local learning stack. NOT a hardened internet-facing deployment.
+name: workflow-pro-day81
+services:
+  db:
+    image: postgres:18-bookworm
+    environment:
+      POSTGRES_USER: workflow_day81
+      POSTGRES_PASSWORD: ${DAY81_POSTGRES_PASSWORD:?Set DAY81_POSTGRES_PASSWORD in day81/.env}
+      POSTGRES_DB: workflow_day81
+    volumes:
+      # PostgreSQL 18 stores PGDATA under /var/lib/postgresql/18/docker.
+      - workflow_day81_pgdata:/var/lib/postgresql
+      - ./day81/init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U workflow_day81 -d workflow_day81"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+    networks: [workflow_day81_network]
+    restart: "no"
+
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.day81
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: "4000"
+      # Intentional for HTTP-on-localhost cookies. Not a production deployment.
+      NODE_ENV: development
+      WORKFLOW_ALLOWED_ORIGIN: http://api:4000
+      DATABASE_URL: postgresql://workflow_day81:${DAY81_POSTGRES_PASSWORD:?Missing secret}@db:5432/workflow_day81?schema=public
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks: [workflow_day81_network]
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.day81
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      WORKFLOW_API_URL: http://api:4000
+      WORKFLOW_PUBLIC_ORIGIN: http://127.0.0.1:3081
+    ports:
+      - "127.0.0.1:3081:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 40s
+    networks: [workflow_day81_network]
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+
+networks:
+  workflow_day81_network:
+    driver: bridge
+volumes:
+  workflow_day81_pgdata:

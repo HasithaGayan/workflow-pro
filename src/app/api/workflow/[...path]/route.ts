@@ -168,7 +168,12 @@ async function forward(
       request.method
     )
   ) {
-    const ownOrigin = new URL(request.url).origin;
+    // An explicit public origin is needed when Docker / a reverse proxy
+    // exposes a different internal host in request.url.
+    // Keep strict comparison; never trust a browser-supplied Host header.
+    const ownOrigin = process.env.WORKFLOW_PUBLIC_ORIGIN
+      ? new URL(process.env.WORKFLOW_PUBLIC_ORIGIN).origin
+      : new URL(request.url).origin;
 
     const receivedOrigin =
       request.headers.get("origin");

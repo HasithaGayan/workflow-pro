@@ -1,0 +1,14 @@
+.git
+node_modules
+generated
+.env
+.env.*
+*.log
+README.md
+tests
+.skills
+.agents
+.claude
+.windsurf
+skills-lock.json
+db
