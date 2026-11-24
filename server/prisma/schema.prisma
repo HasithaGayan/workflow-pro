@@ -83,3 +83,11 @@ model auth_sessions {
   @@index([expires_at], map: "idx_auth_sessions_expiry")
   @@index([user_id], map: "idx_auth_sessions_user")
 }
+
+model auth_rate_limits {
+  rate_key String   @id @db.VarChar(128)
+  hits     Int
+  reset_at DateTime @db.Timestamptz(6)
+
+  @@index([reset_at], map: "idx_auth_rate_limits_reset")
+}

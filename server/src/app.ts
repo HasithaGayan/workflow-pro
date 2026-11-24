@@ -2,6 +2,7 @@
 import express from "express";
 import { randomUUID } from "node:crypto";
 import helmet from "helmet";
+import { requireTrustedProxy } from "./middleware/trustedProxy";
 
 import { taskRoutes } from "./routes/taskRoutes";
 
@@ -44,6 +45,8 @@ app.use(
       process.env.NODE_ENV === "production",
   })
 );
+
+app.use(requireTrustedProxy);
 
 app.use(express.json({ limit: "10kb" }));
 
@@ -159,3 +162,5 @@ app.use((_req, res) => {
 
 // Central error handler.
 app.use(errorHandler);
+
+export default app;

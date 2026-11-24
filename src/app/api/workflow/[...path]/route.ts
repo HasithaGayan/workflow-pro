@@ -1,3 +1,5 @@
+import { isIP } from "node:net";
+
 
 type Context = {
   params: Promise<{ path: string[] }>;
@@ -241,6 +243,49 @@ async function forward(
 
   headers.set("Accept", "application/json");
 
+  // Authenticate server-to-server cloud requests.
+  const proxySecret = process.env.WORKFLOW_PROXY_SECRET ?? "";
+
+  const proxyAuthRequired =
+    process.env.WORKFLOW_REQUIRE_PROXY_AUTH === "1" ||
+    process.env.VERCEL === "1";
+
+  if (proxyAuthRequired || proxySecret) {
+    if (!/^[0-9a-f]{64}$/.test(proxySecret)) {
+      return apiError(
+        503,
+        "Backend security configuration unavailable"
+      );
+    }
+
+    headers.set("X-Workflow-Proxy-Key", proxySecret);
+
+    if (
+      process.env.VERCEL === "1" &&
+      backend.protocol !== "https:"
+    ) {
+      return apiError(503, "Secure backend connection required");
+    }
+
+    const authOperation =
+      request.method === "POST" &&
+      ["auth/login", "auth/register"].includes(path.join("/"));
+
+    if (authOperation) {
+      // Trust platform-controlled IP information only on Vercel.
+      const clientIp =
+        process.env.VERCEL === "1"
+          ? request.headers.get("x-forwarded-for") ?? ""
+          : "";
+
+      if (!isIP(clientIp) || clientIp.includes("%")) {
+        return apiError(503, "Client protection unavailable");
+      }
+
+      headers.set("X-Workflow-Client-IP", clientIp);
+    }
+  }
+
   // Express checks the backend's trusted origin.
   // The browser origin was validated above.
   headers.set("Origin", backend.origin);
@@ -336,6 +381,18 @@ async function forward(
         "Set-Cookie",
         setCookie
       );
+    }
+
+    for (const name of [
+      "Retry-After",
+      "X-RateLimit-Limit",
+      "X-RateLimit-Remaining",
+    ]) {
+      const value = upstream.headers.get(name);
+
+      if (value !== null) {
+        responseHeaders.set(name, value);
+      }
     }
 
     return new Response(upstream.body, {

@@ -1,36 +1,124 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# WorkFlow Pro
 
-## Getting Started
+A full-stack project and task management platform for organizing workspaces, managing priorities and tracking project progress.
 
-First, run the development server:
+![Next.js](https://img.shields.io/badge/Next.js-000000?logo=nextdotjs)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
+![Express](https://img.shields.io/badge/Express-000000?logo=express)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)
+![Prisma](https://img.shields.io/badge/Prisma-2D3748?logo=prisma)
+![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000?logo=vercel)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Live Application
+
+**[Launch WorkFlow Pro](https://workflow-pro-weld.vercel.app)**
+
+Create an account, organize projects, manage tasks and explore the Kanban board using sample data.
+
+## Application Preview
+
+![WorkFlow Pro Kanban Board](docs/screenshots/06-kanban-board.png)
+
+## Key Features
+
+- Account registration and authentication
+- Personalized workspace dashboard
+- Workspace and project management
+- Task creation and priority management
+- To Do, In Progress and Done workflows
+- Kanban task board
+- Task search and filtering
+- Project completion insights
+- Persistent PostgreSQL storage
+- Responsive user interface
+
+## Screenshots
+
+### Workspace Dashboard
+
+![Workspace Dashboard](docs/screenshots/03-dashboard.png)
+
+### Projects and Tasks
+
+![Project and Task Management](docs/screenshots/05-task-management.png)
+
+### Task Insights
+
+![Task Insights](docs/screenshots/08-task-insights.png)
+
+### Authentication
+
+| Sign In | Create Account |
+| --- | --- |
+| ![Sign In](docs/screenshots/01-login.png) | ![Registration](docs/screenshots/02-register.png) |
+
+### Additional Views
+
+- [Project creation](docs/screenshots/04-projects.png)
+- [Mobile dashboard](docs/screenshots/07-mobile-view.png)
+
+## Technology Stack
+
+| Layer | Technology |
+| --- | --- |
+| Frontend | Next.js, React, TypeScript |
+| Backend | Node.js, Express, TypeScript |
+| Database | PostgreSQL, Neon |
+| ORM | Prisma |
+| Authentication | Argon2id and session-based authentication |
+| Validation | Zod |
+| Security | Helmet, CSRF protection, proxy authentication, rate limiting |
+| Deployment | Vercel |
+| Version Control | Git and GitHub |
+
+## System Architecture
+
+```mermaid
+flowchart TD
+    A[User Browser] -->|HTTPS| B[Next.js Frontend]
+    B --> C[Server-side API Proxy]
+    C -->|Private Proxy Authentication| D[Express Backend]
+    D --> E[Prisma ORM]
+    E --> F[(Neon PostgreSQL)]
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The frontend and backend are deployed independently. The server-side proxy connects the frontend to the Express API without exposing the shared authentication secret to the browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Security Design
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Argon2id password hashing and session-based authentication
+- Secure HTTP-only session cookies and CSRF protection
+- Workspace membership and role-based access controls
+- Server-side input validation
+- Database-backed authentication rate limiting
+- Protected backend API access and server-side environment variables
 
-## Learn More
+## Deployment Verification
 
-To learn more about Next.js, take a look at the following resources:
+- Production frontend and backend deployments completed.
+- PostgreSQL migrations successfully applied.
+- Production API health check returned HTTP 200.
+- Unauthorized direct backend requests returned HTTP 403.
+- Browser testing demonstrated registration, login, workspace creation, project creation, task creation and status updates.
+- A second test account displayed a separate empty workspace dashboard.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Authenticated cross-account API authorization and additional security verification remain pending.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Project Documentation
 
-## Deploy on Vercel
+[Cloud Deployment and Verification](docs/cloud-deployment.md)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Project Status
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+WorkFlow Pro is a publicly accessible portfolio demonstration with a functioning cloud backend and persistent database. It is not a security-audited enterprise service. Use sample data rather than confidential information.
+
+## Developer
+
+**Hasitha Gayan** â€” AI and Full-Stack Development
+
+- [GitHub](https://github.com/HasithaGayan)
+- [Developer Portfolio](https://hasithagayan.github.io/ai-fullstack-87/)
+
+---
+
+Built as part of an AI and Full-Stack engineering development journey.

@@ -1,5 +1,6 @@
 
 import { rateLimit } from "express-rate-limit";
+import { createCloudAuthLimiter } from "./cloudAuthRateLimit";
 
 import type {
   Request,
@@ -11,7 +12,7 @@ const FIFTEEN_MINUTES = 15 * 60 * 1000;
 
 // Limit failed login attempts per client IP.
 // Successful requests do not consume the quota.
-export const loginLimiter = rateLimit({
+const localLoginLimiter = rateLimit({
   windowMs: FIFTEEN_MINUTES,
   limit: 5,
   standardHeaders: "draft-8",
@@ -24,7 +25,7 @@ export const loginLimiter = rateLimit({
 });
 
 // Limit account creation per client IP.
-export const registrationLimiter = rateLimit({
+const localRegistrationLimiter = rateLimit({
   windowMs: FIFTEEN_MINUTES,
   limit: 10,
   standardHeaders: "draft-8",
@@ -34,6 +35,12 @@ export const registrationLimiter = rateLimit({
     error: "Too many registrations. Try again later.",
   },
 });
+
+export const loginLimiter =
+  createCloudAuthLimiter("login", localLoginLimiter);
+
+export const registrationLimiter =
+  createCloudAuthLimiter("register", localRegistrationLimiter);
 
 function denyRequest(
   res: Response,
