@@ -1,0 +1,4 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm ci --include=dev --no-audit --no-fund && npm run db:generate -- --config prisma7.config.ts"
+}
